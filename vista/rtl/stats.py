@@ -23,6 +23,7 @@ def circuit_stats(c: Circuit) -> dict:
         "max_fanin": max(len(g.inputs) for g in c.gates.values()),
         "max_fanout": max(len(n.fanout) for n in c.nets.values()),
         "stems": len(c.stems),
+        "po_fanout": c.po_with_fanout,
     }
 
 

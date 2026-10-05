@@ -99,6 +99,11 @@ class Circuit:
     @property
     def stems(self) -> list[str]:
         return [n.name for n in self.nets.values() if n.is_stem]
+    @property
+    def po_with_fanout(self) -> list[str]:
+        """POs that also feed gates. Their gate-input branches are not modelled as faults yet."""
+        return [n.name for n in self.nets.values() if n.is_po and n.fanout]
+    
 
     def validate(self) -> None:
         """Check structural legality: no floating nets, no loops, POs driven."""

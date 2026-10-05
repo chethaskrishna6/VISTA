@@ -78,3 +78,9 @@ def test_stats(bench):
     s = circuit_stats(bench)
     assert (s["inputs"], s["outputs"], s["gates"], s["depth"]) == (5, 2, 6, 3)
     assert s["gate_types"] == {"nand": 6} and s["max_fanin"] == 2 and s["stems"] == 3
+def test_po_with_fanout_detection(bench):
+    assert bench.po_with_fanout == []
+    c = parse_bench("INPUT(a)\nINPUT(b)\nOUTPUT(n)\nOUTPUT(y)\nn = AND(a, b)\ny = NOT(n)\n", "pof")
+    assert c.po_with_fanout == ["n"]
+    # Documents the known gap: n is PO + gate input (2 branches), yet only 4 nets x 2 = 8 faults exist.
+    assert len(generate_stuck_at_faults(c)) == 8
