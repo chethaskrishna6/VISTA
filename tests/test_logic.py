@@ -20,7 +20,7 @@ def test_x_propagates_when_not_controlled():
     assert eval_gate(G.NOT, [X]) == X
 
 
-@pytest.mark.parametrize("a,b", itertools.product([0, 1], repeat=2))
+@pytest.mark.parametrize("a,b", list(itertools.product([0, 1], repeat=2)))
 def test_two_input_truth_tables(a, b):
     assert eval_gate(G.AND, [a, b]) == (a & b)
     assert eval_gate(G.NAND, [a, b]) == 1 - (a & b)
