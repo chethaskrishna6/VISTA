@@ -1,6 +1,6 @@
 """Engine 3 (part 1): PODEM building blocks. The decision/backtracking loop comes in Step 11."""
 from __future__ import annotations
-
+from dataclasses import dataclass
 import argparse
 from enum import Enum
 
@@ -19,7 +19,18 @@ class Status(Enum):
     FAILED = "failed"                # this partial assignment cannot lead to a test
     CONTINUE = "continue"            # keep searching; an objective is available
 
+class Outcome(Enum):
+    TESTED = "tested"
+    REDUNDANT = "redundant"      # search exhausted: provably untestable
+    ABORTED = "aborted"          # backtrack limit hit: unknown
 
+
+@dataclass
+class PodemResult:
+    fault: Fault
+    outcome: Outcome
+    cube: dict[str, int]         # assigned PIs only; the rest are don't-cares
+    backtracks: int
 class PodemEngine:
     def __init__(self, circuit: Circuit, fault: Fault) -> None:
         self.circuit = circuit
@@ -95,7 +106,57 @@ class PodemEngine:
                 value ^= parity                         # make the parity come out right
             net = gate.inputs[i]
         return net, value
+    # ---- pruning ---------------------------------------------------------
+    def x_path_exists(self, values: dict[str, Pair]) -> bool:
+        """Can some D-frontier gate still reach a PO through undetermined (X) outputs?"""
+        c = self.circuit
+        seen: set[str] = set()
+        todo = [g.output for g in self.d_frontier(values)]
+        while todo:
+            net = todo.pop()
+            if net in seen:
+                continue
+            seen.add(net)
+            if c.nets[net].is_po:
+                return True
+            for gname in c.nets[net].fanout:
+                out = c.gates[gname].output
+                if has_x(values[out]):
+                    todo.append(out)
+        return False
 
+    # ---- the search ------------------------------------------------------
+    def generate(self, backtrack_limit: int = 100) -> PodemResult:
+        assignment: dict[str, int] = {}
+        stack: list[tuple[str, int, bool]] = []      # (pi, value, already_flipped)
+        backtracks = 0
+        while True:
+            values = self.imply(assignment)
+            status, obj = self.objective(values)
+            if status is Status.DETECTED:
+                return PodemResult(self.fault, Outcome.TESTED, dict(assignment), backtracks)
+
+            excited = values[self.fault.net][0] != X
+            if status is Status.CONTINUE and (not excited or self.x_path_exists(values)):
+                pi, val = self.backtrace(values, *obj)
+                assignment[pi] = val
+                stack.append((pi, val, False))
+                continue
+
+            # dead end: flip the most recent unflipped decision
+            while stack:
+                pi, val, flipped = stack.pop()
+                if flipped:
+                    del assignment[pi]               # both values tried: undo it
+                    continue
+                backtracks += 1
+                if backtracks > backtrack_limit:
+                    return PodemResult(self.fault, Outcome.ABORTED, {}, backtracks)
+                assignment[pi] = 1 - val
+                stack.append((pi, 1 - val, True))
+                break
+            else:                                    # stack exhausted, nothing left to flip
+                return PodemResult(self.fault, Outcome.REDUNDANT, {}, backtracks)
 
 # ---- inspection CLI --------------------------------------------------------
 def main(argv: list[str] | None = None) -> None:
