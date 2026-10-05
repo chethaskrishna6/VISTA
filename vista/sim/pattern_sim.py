@@ -10,7 +10,7 @@ from pathlib import Path
 from vista.faults.collapse import CollapseResult, collapse_equivalent
 from vista.faults.stuck_at import Fault, generate_stuck_at_faults
 from vista.rtl.model import Circuit
-from vista.rtl.parser import VerilogParser
+from vista.rtl.loader import load_circuit
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import to_str
 
@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--json", metavar="FILE", help="write JSON report")
     args = ap.parse_args(argv)
 
-    c = VerilogParser().parse_file(args.netlist)
+    c = load_circuit(args.netlist)
     universe = generate_stuck_at_faults(c)
     if args.uncollapsed:
         faults, weights = universe, None
