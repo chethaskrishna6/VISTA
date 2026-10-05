@@ -59,10 +59,13 @@ class SerialFaultSimulator:
         return {po: values[po] for po in self._pos}
 
     # ---- detection ----------------------------------------------------
-    def detected_outputs(self, pattern: dict[str, int], fault: Fault) -> list[str]:
+    def detected_outputs(self, pattern: dict[str, int], fault: Fault,
+                         good: dict[str, int] | None = None) -> list[str]:
         """POs where good and faulty values are both known and differ.
-        X on either side is NOT counted (conservative; 'potential detects' ignored)."""
-        good, bad = self.outputs(pattern), self.outputs(pattern, fault)
+        X on either side is NOT counted (conservative; 'potential detects' ignored).
+        Pass `good` (from self.outputs(pattern)) to avoid recomputing it per fault."""
+        good = self.outputs(pattern) if good is None else good
+        bad = self.outputs(pattern, fault)
         return [po for po in self._pos
                 if good[po] != X and bad[po] != X and good[po] != bad[po]]
 

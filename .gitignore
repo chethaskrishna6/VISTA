@@ -6,3 +6,4 @@ parser.out
 .pytest_cache/
 *.vcd
 .build/
+reports/
