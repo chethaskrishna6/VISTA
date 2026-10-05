@@ -1,6 +1,6 @@
 """Engine 3 driver: PODEM + fault dropping -> test set."""
 from __future__ import annotations
-
+import time
 import argparse
 import json
 from dataclasses import dataclass, field
@@ -78,7 +78,9 @@ def generate_test_set(circuit: Circuit, faults: list[Fault],
     for f in faults:
         if f in res.covered_by:
             continue                                   # dropped by an earlier pattern
+        t0 = time.perf_counter()
         r = PodemEngine(circuit, f).generate(backtrack_limit)
+        r.seconds = time.perf_counter() - t0
         res.podem[f] = r
         if r.outcome is not Outcome.TESTED:
             continue
@@ -100,6 +102,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--limit", type=int, default=100, help="backtrack limit per fault")
     ap.add_argument("--fill", type=int, choices=(0, 1), default=0, help="don't-care fill")
     ap.add_argument("--uncollapsed", action="store_true")
+    ap.add_argument("--verbose", action="store_true", help="per-fault listing")
     ap.add_argument("--json", metavar="FILE")
     args = ap.parse_args(argv)
 
@@ -111,25 +114,47 @@ def main(argv: list[str] | None = None) -> None:
         col = collapse_equivalent(c, universe)
         faults, weights = col.representatives, {r: len(m) for r, m in col.classes.items()}
 
+    t0 = time.perf_counter()
     res = generate_test_set(c, faults, weights, args.limit, args.fill)
-    print(f"{c.name}: {len(faults)} faults, PI order {res.pi_order}")
-    for f in faults:
-        r = res.podem.get(f)
-        how = (f"pattern {res.covered_by[f]}" + ("" if r else " (dropped, no PODEM run)")
-               if f in res.covered_by else r.outcome.value)
-        bt = f"  backtracks={r.backtracks}" if r else ""
-        print(f"  {f.id:<22} {how}{bt}")
-    print("patterns:")
-    for i, p in enumerate(res.patterns):
-        print(f"  p{i:<2} {res.bits(p)}   cube {res.bits(res.cubes[i])}")
-    print(f"fault coverage   : {100 * res.coverage:.1f}%")
-    print(f"fault efficiency : {100 * res.efficiency:.1f}%")
-    print(f"redundant={len(res.redundant)} aborted={len(res.aborted)} patterns={len(res.patterns)}")
+    wall = time.perf_counter() - t0
+
+    print(f"{c.name}: {len(faults)} faults, {len(c.primary_inputs)} PIs, backtrack limit {args.limit}")
+    if args.verbose or len(faults) <= 40:
+        for f in faults:
+            r = res.podem.get(f)
+            how = (f"pattern {res.covered_by[f]}" + ("" if r else " (dropped)")
+                   if f in res.covered_by else r.outcome.value)
+            print(f"  {f.id:<24} {how}" + (f"  bt={r.backtracks}" if r else ""))
+
+    runs = list(res.podem.values())
+    bts = [r.backtracks for r in runs]
+    buckets = {"0": sum(b == 0 for b in bts), "1-9": sum(1 <= b <= 9 for b in bts),
+               "10-99": sum(10 <= b <= 99 for b in bts), "100+": sum(b >= 100 for b in bts)}
+    podem_time = sum(r.seconds for r in runs)
+    print("--- statistics ---")
+    print(f"patterns          : {len(res.patterns)}")
+    print(f"PODEM runs        : {len(runs)}   dropped by simulation: {len(faults) - len(runs)}")
+    print(f"backtracks        : total {sum(bts)}, max {max(bts, default=0)}, histogram {buckets}")
+    print(f"time              : total {wall:.2f}s, in PODEM {podem_time:.2f}s")
+    for r in sorted(runs, key=lambda r: -r.seconds)[:3]:
+        print(f"  slowest: {r.fault.id:<22} {r.seconds:.3f}s  bt={r.backtracks}  {r.outcome.value}")
+    print(f"redundant ({len(res.redundant)}): {[f.id for f in res.redundant][:10]}")
+    print(f"aborted   ({len(res.aborted)}): {[f.id for f in res.aborted][:10]}")
+    print(f"fault coverage    : {100 * res.coverage:.2f}%")
+    print(f"fault efficiency  : {100 * res.efficiency:.2f}%")
+
+    # independent check: a separate code path must agree on what the patterns detect
+    from vista.sim.pattern_sim import run_fault_simulation
+    rep = run_fault_simulation(c, faults, res.patterns, weights)
+    resim = set(rep.detected)
+    claimed = set(res.covered_by)
+    print(f"independent re-simulation: {'AGREES' if resim == claimed else 'MISMATCH'} "
+          f"({len(resim)} detected)")
+
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json).write_text(json.dumps(res.to_dict(), indent=2))
         print(f"report written to {args.json}")
-
 
 if __name__ == "__main__":
     main()

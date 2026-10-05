@@ -29,8 +29,9 @@ class Outcome(Enum):
 class PodemResult:
     fault: Fault
     outcome: Outcome
-    cube: dict[str, int]         # assigned PIs only; the rest are don't-cares
+    cube: dict[str, int]
     backtracks: int
+    seconds: float = 0.0
 class PodemEngine:
     def __init__(self, circuit: Circuit, fault: Fault) -> None:
         self.circuit = circuit
