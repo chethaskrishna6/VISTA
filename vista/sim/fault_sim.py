@@ -136,3 +136,9 @@ class SerialFaultSimulator:
         bad = self.simulate_faulty(good, fault)
         return [po for po in self._pos
                 if good[po] != X and bad[po] != X and good[po] != bad[po]]
+    def cone_for(self, fault: Fault) -> list[Gate]:
+        """Gates in the fault's fanout cone, topologically ordered."""
+        self._check_fault(fault)
+        if fault.is_branch:
+            return self._cone(("b", fault.gate), [fault.gate])
+        return self._cone(("s", fault.net), self.circuit.nets[fault.net].fanout)

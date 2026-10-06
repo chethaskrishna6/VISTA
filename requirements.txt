@@ -1,3 +1,4 @@
 pyverilog
 networkx
 pytest
+python-sat
