@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import argparse
 from enum import Enum
-
+from vista.atpg.scoap import Scoap
 from vista.atpg.dalgebra import Pair, has_x, is_effect, symbol
 from vista.faults.stuck_at import Fault, generate_stuck_at_faults
 from vista.rtl.model import Circuit, Gate, GateType
@@ -33,9 +33,10 @@ class PodemResult:
     backtracks: int
     seconds: float = 0.0
 class PodemEngine:
-    def __init__(self, circuit: Circuit, fault: Fault) -> None:
+    def __init__(self, circuit: Circuit, fault: Fault, scoap: Scoap | None = None) -> None:
         self.circuit = circuit
         self.fault = fault
+        self.scoap = scoap                      # None -> the original "first X input" heuristics
         self._sim = SerialFaultSimulator(circuit)
         self._order = circuit.gates_in_topo_order()
 
@@ -69,42 +70,76 @@ class PodemEngine:
         return frontier
 
     # ---- objective -------------------------------------------------------
+        # ---- heuristic helpers ---------------------------------------------
+    def _cc(self, net: str, v: int) -> int:
+        return (self.scoap.cc1 if v else self.scoap.cc0)[net]
+
+    def _xor_need(self, values: dict[str, Pair], gate: Gate, i: int, value: int) -> int:
+        """Value input i must take so the XOR output reaches `value`, given known side inputs."""
+        parity = sum(values[n][0] for j, n in enumerate(gate.inputs)
+                     if j != i and values[n][0] != X) & 1
+        return value ^ parity
+
+    def _pick_input(self, gate: Gate, pins: list[int], value: int) -> int:
+        if self.scoap is None or len(pins) == 1:
+            return pins[0]
+        cost = lambda p: self._cc(gate.inputs[p], value)
+        if value == non_controlling(gate.type):        # every input must take this value
+            return max(pins, key=cost)                 # hardest first: fail early
+        return min(pins, key=cost)                     # one input suffices: easiest
+
+    # ---- objective -------------------------------------------------------
     def objective(self, values: dict[str, Pair]) -> tuple[Status, Objective | None]:
         if self.detected(values):
             return Status.DETECTED, None
         fl = self.fault
         site_good = values[fl.net][0]
-        if site_good == fl.value:                       # site can no longer be excited
+        if site_good == fl.value:
             return Status.FAILED, None
-        if site_good == X:                              # goal 1: excite the fault
+        if site_good == X:
             return Status.CONTINUE, (fl.net, 1 - fl.value)
-        # goal 2: advance the fault effect through a D-frontier gate.
-        # Heuristic (swappable later): take the first frontier gate in topological order.
-        for gate in self.d_frontier(values):
-            for pin, net in enumerate(gate.inputs):
-                if has_x(self.pin_pair(values, gate, pin)):
-                    # side input -> non-controlling value (XOR/XNOR have none: any value works)
-                    want = non_controlling(gate.type) if gate.type in CONTROLLING else 0
-                    return Status.CONTINUE, (net, want)
-        return Status.FAILED, None                      # empty D-frontier
+        frontier = self.d_frontier(values)
+        if self.scoap is not None:                     # stable sort: ties keep topological order
+            frontier.sort(key=lambda g: self.scoap.co[g.output])
+        for gate in frontier:
+            pins = [p for p in range(len(gate.inputs))
+                    if has_x(self.pin_pair(values, gate, p))]
+            if not pins:
+                continue
+            if self.scoap is None:
+                pin = pins[0]
+                want = non_controlling(gate.type) if gate.type in CONTROLLING else 0
+            elif gate.type in CONTROLLING:
+                want = non_controlling(gate.type)
+                pin = max(pins, key=lambda p: self._cc(gate.inputs[p], want))
+            else:                                      # XOR/XNOR: any side value lets D through
+                pin = min(pins, key=lambda p: min(self.scoap.cc0[gate.inputs[p]],
+                                                  self.scoap.cc1[gate.inputs[p]]))
+                n = gate.inputs[pin]
+                want = 0 if self.scoap.cc0[n] <= self.scoap.cc1[n] else 1
+            return Status.CONTINUE, (gate.inputs[pin], want)
+        return Status.FAILED, None
 
     # ---- backtrace -------------------------------------------------------
     def backtrace(self, values: dict[str, Pair], net: str, value: int) -> tuple[str, int]:
-        """Walk from (net, value) back to an unassigned PI; return (pi, value_to_try)."""
         c = self.circuit
         while not c.nets[net].is_pi:
             gate = c.gates[c.nets[net].driver]
             if gate.type in INVERTING:
-                value = 1 - value                       # now: required XOR/OR/AND-family value
+                value = 1 - value
             pins = [i for i in range(len(gate.inputs))
                     if has_x(self.pin_pair(values, gate, i))]
             if not pins:
                 raise RuntimeError(f"backtrace stuck at gate '{gate.name}'")
-            i = pins[0]                                 # heuristic: first undetermined input
             if gate.type in (GateType.XOR, GateType.XNOR):
-                parity = sum(values[n][0] for j, n in enumerate(gate.inputs)
-                             if j != i and values[n][0] != X) & 1
-                value ^= parity                         # make the parity come out right
+                if self.scoap is None:
+                    i = pins[0]
+                else:
+                    i = min(pins, key=lambda p: self._cc(
+                        gate.inputs[p], self._xor_need(values, gate, p, value)))
+                value = self._xor_need(values, gate, i, value)
+            else:
+                i = self._pick_input(gate, pins, value)
             net = gate.inputs[i]
         return net, value
     # ---- pruning ---------------------------------------------------------

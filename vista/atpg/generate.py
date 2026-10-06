@@ -5,7 +5,7 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-
+from vista.atpg.scoap import Scoap
 from vista.atpg.podem import Outcome, PodemEngine, PodemResult
 from vista.faults.collapse import collapse_equivalent
 from vista.faults.stuck_at import Fault, generate_stuck_at_faults
@@ -71,7 +71,8 @@ class AtpgResult:
 
 def generate_test_set(circuit: Circuit, faults: list[Fault],
                       weights: dict[Fault, int] | None = None,
-                      backtrack_limit: int = 100, fill: int = 0) -> AtpgResult:
+                      backtrack_limit: int = 100, fill: int = 0,
+                      scoap: Scoap | None = None) -> AtpgResult:
     sim = SerialFaultSimulator(circuit)
     res = AtpgResult(circuit.name, circuit.primary_inputs, faults,
                      {f: (weights or {}).get(f, 1) for f in faults})
@@ -79,7 +80,7 @@ def generate_test_set(circuit: Circuit, faults: list[Fault],
         if f in res.covered_by:
             continue                                   # dropped by an earlier pattern
         t0 = time.perf_counter()
-        r = PodemEngine(circuit, f).generate(backtrack_limit)
+        r = PodemEngine(circuit, f, scoap).generate(backtrack_limit)
         r.seconds = time.perf_counter() - t0
         res.podem[f] = r
         if r.outcome is not Outcome.TESTED:
@@ -104,6 +105,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--uncollapsed", action="store_true")
     ap.add_argument("--verbose", action="store_true", help="per-fault listing")
     ap.add_argument("--json", metavar="FILE")
+    ap.add_argument("--scoap", action="store_true", help="SCOAP-guided backtrace/objective")
     args = ap.parse_args(argv)
 
     c = load_circuit(args.netlist)
@@ -115,7 +117,8 @@ def main(argv: list[str] | None = None) -> None:
         faults, weights = col.representatives, {r: len(m) for r, m in col.classes.items()}
 
     t0 = time.perf_counter()
-    res = generate_test_set(c, faults, weights, args.limit, args.fill)
+    res = generate_test_set(c, faults, weights, args.limit, args.fill,
+                            Scoap(c) if args.scoap else None)
     wall = time.perf_counter() - t0
 
     print(f"{c.name}: {len(faults)} faults, {len(c.primary_inputs)} PIs, backtrack limit {args.limit}")
@@ -142,6 +145,8 @@ def main(argv: list[str] | None = None) -> None:
     print(f"aborted   ({len(res.aborted)}): {[f.id for f in res.aborted][:10]}")
     print(f"fault coverage    : {100 * res.coverage:.2f}%")
     print(f"fault efficiency  : {100 * res.efficiency:.2f}%")
+    print(f"{c.name}: {len(faults)} faults, {len(c.primary_inputs)} PIs, "
+          f"backtrack limit {args.limit}, heuristic {'scoap' if args.scoap else 'naive'}")
 
     # independent check: a separate code path must agree on what the patterns detect
     from vista.sim.pattern_sim import run_fault_simulation
