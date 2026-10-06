@@ -12,7 +12,7 @@ from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import CONTROLLING, INVERTING, X, from_str, non_controlling
 
 Objective = tuple[str, int]          # (net, desired good-machine value)
-
+SCOAP_PARTS = frozenset({"backtrace", "frontier", "side"})
 
 class Status(Enum):
     DETECTED = "detected"            # a PO shows D or D'
@@ -33,12 +33,20 @@ class PodemResult:
     backtracks: int
     seconds: float = 0.0
 class PodemEngine:
-    def __init__(self, circuit: Circuit, fault: Fault, scoap: Scoap | None = None) -> None:
+    def __init__(self, circuit: Circuit, fault: Fault, scoap: Scoap | None = None,
+                 use: frozenset[str] | set[str] = SCOAP_PARTS) -> None:
+        unknown = set(use) - SCOAP_PARTS
+        if unknown:
+            raise ValueError(f"unknown SCOAP parts: {sorted(unknown)}")
         self.circuit = circuit
         self.fault = fault
-        self.scoap = scoap                      # None -> the original "first X input" heuristics
+        self.scoap = scoap                      # None -> all naive "first X input" heuristics
+        self.use = frozenset(use)               # which SCOAP components are active
         self._sim = SerialFaultSimulator(circuit)
         self._order = circuit.gates_in_topo_order()
+
+    def _on(self, part: str) -> bool:
+        return self.scoap is not None and part in self.use
 
     # ---- implication: forward-simulate the (good, faulty) pair --------
     def imply(self, assignment: dict[str, int]) -> dict[str, Pair]:
@@ -81,7 +89,7 @@ class PodemEngine:
         return value ^ parity
 
     def _pick_input(self, gate: Gate, pins: list[int], value: int) -> int:
-        if self.scoap is None or len(pins) == 1:
+        if not self._on("backtrace") or len(pins) == 1:
             return pins[0]
         cost = lambda p: self._cc(gate.inputs[p], value)
         if value == non_controlling(gate.type):        # every input must take this value
@@ -99,14 +107,14 @@ class PodemEngine:
         if site_good == X:
             return Status.CONTINUE, (fl.net, 1 - fl.value)
         frontier = self.d_frontier(values)
-        if self.scoap is not None:                     # stable sort: ties keep topological order
+        if self._on("frontier"):                       # stable sort: ties keep topological order
             frontier.sort(key=lambda g: self.scoap.co[g.output])
         for gate in frontier:
             pins = [p for p in range(len(gate.inputs))
                     if has_x(self.pin_pair(values, gate, p))]
             if not pins:
                 continue
-            if self.scoap is None:
+            if not self._on("side"):
                 pin = pins[0]
                 want = non_controlling(gate.type) if gate.type in CONTROLLING else 0
             elif gate.type in CONTROLLING:
@@ -119,7 +127,6 @@ class PodemEngine:
                 want = 0 if self.scoap.cc0[n] <= self.scoap.cc1[n] else 1
             return Status.CONTINUE, (gate.inputs[pin], want)
         return Status.FAILED, None
-
     # ---- backtrace -------------------------------------------------------
     def backtrace(self, values: dict[str, Pair], net: str, value: int) -> tuple[str, int]:
         c = self.circuit
@@ -132,7 +139,7 @@ class PodemEngine:
             if not pins:
                 raise RuntimeError(f"backtrace stuck at gate '{gate.name}'")
             if gate.type in (GateType.XOR, GateType.XNOR):
-                if self.scoap is None:
+                if not self._on("backtrace"):
                     i = pins[0]
                 else:
                     i = min(pins, key=lambda p: self._cc(

@@ -13,7 +13,7 @@ from vista.rtl.model import Circuit
 from vista.rtl.loader import load_circuit
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import X, to_str
-
+from vista.atpg.podem import Outcome, PodemEngine, PodemResult, SCOAP_PARTS
 Pattern = dict[str, int]
 
 
@@ -35,7 +35,10 @@ class AtpgResult:
     def redundant(self): return [f for f, r in self.podem.items() if r.outcome is Outcome.REDUNDANT]
     @property
     def aborted(self): return [f for f, r in self.podem.items() if r.outcome is Outcome.ABORTED]
-
+    @property
+    def unresolved(self):
+        """PODEM gave up AND no later pattern happened to detect the fault."""
+        return [f for f in self.aborted if f not in self.covered_by]
     @property
     def coverage(self) -> float:
         return self._w(self.covered_by) / self._w(self.faults)
@@ -72,7 +75,8 @@ class AtpgResult:
 def generate_test_set(circuit: Circuit, faults: list[Fault],
                       weights: dict[Fault, int] | None = None,
                       backtrack_limit: int = 100, fill: int = 0,
-                      scoap: Scoap | None = None) -> AtpgResult:
+                      scoap: Scoap | None = None,
+                      use: frozenset[str] = SCOAP_PARTS) -> AtpgResult:
     sim = SerialFaultSimulator(circuit)
     res = AtpgResult(circuit.name, circuit.primary_inputs, faults,
                      {f: (weights or {}).get(f, 1) for f in faults})
@@ -80,7 +84,7 @@ def generate_test_set(circuit: Circuit, faults: list[Fault],
         if f in res.covered_by:
             continue                                   # dropped by an earlier pattern
         t0 = time.perf_counter()
-        r = PodemEngine(circuit, f, scoap).generate(backtrack_limit)
+        r = PodemEngine(circuit, f, scoap, use).generate(backtrack_limit)
         r.seconds = time.perf_counter() - t0
         res.podem[f] = r
         if r.outcome is not Outcome.TESTED:
