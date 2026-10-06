@@ -73,7 +73,7 @@ def test_test_set_full_coverage_and_independent_resimulation(c17):
     assert res.coverage == 1.0 and res.efficiency == 1.0
     assert not res.redundant and not res.aborted
     assert len(res.patterns) < len(col.representatives)    # dropping must compact
-    rep = run_fault_simulation(c17, col.representatives, res.patterns, w)
+    rep = run_fault_simulation(c17, col.representatives, res.patterns, w, reference=True)
     assert rep.undetected == []      
 def test_podem_results_carry_timing(c17):
     col = collapse_equivalent(c17, generate_stuck_at_faults(c17))

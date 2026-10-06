@@ -43,7 +43,7 @@ class PodemEngine:
     def imply(self, assignment: dict[str, int]) -> dict[str, Pair]:
         """Net -> (good, faulty). Unassigned PIs are X."""
         good = self._sim.simulate(assignment)
-        bad = self._sim.simulate(assignment, self.fault)
+        bad = self._sim.simulate_faulty(good, self.fault)
         return {n: (good[n], bad[n]) for n in good}
 
     def pin_pair(self, values: dict[str, Pair], gate: Gate, pin: int) -> Pair:

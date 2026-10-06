@@ -129,18 +129,24 @@ class SimReport:
 # ---- the driver --------------------------------------------------------
 def run_fault_simulation(circuit: Circuit, faults: list[Fault], patterns: list[Pattern],
                          weights: dict[Fault, int] | None = None,
-                         drop: bool = True) -> SimReport:
+                         drop: bool = True, reference: bool = False) -> SimReport:
+    """reference=True uses the slow full-circuit path, kept as an independent oracle."""
     sim = SerialFaultSimulator(circuit)
     detections: dict[Fault, list[int]] = {f: [] for f in faults}
     active = list(faults)
     for idx, pat in enumerate(patterns):
-        good = sim.outputs(pat)                      # once per pattern, not per fault
+        if reference:
+            good = sim.outputs(pat)
+            detect = lambda f: sim.detected_outputs(pat, f, good)
+        else:
+            good = sim.simulate(pat)
+            detect = lambda f: sim.detected_from_good(good, f)
         still_active = []
         for f in active:
-            if sim.detected_outputs(pat, f, good):
+            if detect(f):
                 detections[f].append(idx)
                 if drop:
-                    continue                         # dropped: never simulated again
+                    continue
             still_active.append(f)
         active = still_active
         if not active:
@@ -148,7 +154,6 @@ def run_fault_simulation(circuit: Circuit, faults: list[Fault], patterns: list[P
     w = {f: (weights or {}).get(f, 1) for f in faults}
     return SimReport(circuit.name, circuit.primary_inputs, circuit.primary_outputs,
                      patterns, faults, w, drop, detections)
-
 
 # ---- CLI ---------------------------------------------------------------
 def main(argv: list[str] | None = None) -> None:

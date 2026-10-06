@@ -5,7 +5,7 @@ from itertools import product
 from typing import Iterator
 
 from vista.faults.stuck_at import Fault
-from vista.rtl.model import Circuit
+from vista.rtl.model import Circuit, Gate 
 from vista.sim.logic import ONE, VALUES, X, ZERO, eval_gate, to_str
 
 MAX_EXHAUSTIVE_PIS = 16
@@ -17,6 +17,8 @@ class SerialFaultSimulator:
         self._order = circuit.gates_in_topo_order()
         self._pis = circuit.primary_inputs
         self._pos = circuit.primary_outputs
+        self._gate_index = {g.name: i for i, g in enumerate(self._order)}
+        self._cones: dict[tuple[str, str], list[Gate]] = {}
 
     # ---- validation ---------------------------------------------------
     def _check_fault(self, fault: Fault) -> None:
@@ -83,3 +85,54 @@ class SerialFaultSimulator:
     def signature(self, fault: Fault | None = None) -> tuple[str, ...]:
         """Output string for every input vector. Equal signatures = equivalent behavior."""
         return tuple(to_str(self.outputs(p, fault).values()) for p in self.exhaustive_patterns())
+        # ---- cone-restricted faulty simulation ----------------------------
+    def _cone(self, key: tuple[str, str], starts: list[str]) -> list[Gate]:
+        """Gates that can see a fault effect, in topological order (cached per site)."""
+        cone = self._cones.get(key)
+        if cone is None:
+            seen: set[str] = set()
+            todo = list(starts)
+            while todo:
+                name = todo.pop()
+                if name in seen:
+                    continue
+                seen.add(name)
+                todo.extend(self.circuit.nets[self.circuit.gates[name].output].fanout)
+            cone = [self._order[i] for i in sorted(self._gate_index[n] for n in seen)]
+            self._cones[key] = cone
+        return cone
+
+    def simulate_faulty(self, good: dict[str, int], fault: Fault) -> dict[str, int]:
+        """Faulty-machine value of every net, given the good-machine values of the same pattern.
+        Equivalent to simulate(pattern, fault), but only re-evaluates gates in the fault's
+        fanout cone whose inputs changed."""
+        self._check_fault(fault)
+        values = dict(good)
+        if good[fault.net] == fault.value:
+            return values                                  # not excited: nothing changes
+        changed: set[str] = set()
+        if fault.is_branch:
+            forced = fault.gate
+            cone = self._cone(("b", forced), [forced])
+        else:
+            forced = None
+            values[fault.net] = fault.value
+            changed.add(fault.net)
+            cone = self._cone(("s", fault.net), self.circuit.nets[fault.net].fanout)
+        for g in cone:
+            if g.name != forced and not any(n in changed for n in g.inputs):
+                continue                                   # no event reaches this gate
+            ins = [values[n] for n in g.inputs]
+            if g.name == forced:
+                ins[fault.pin] = fault.value               # only this one pin is stuck
+            out = eval_gate(g.type, ins)
+            if out != values[g.output]:
+                values[g.output] = out
+                changed.add(g.output)
+        return values
+
+    def detected_from_good(self, good: dict[str, int], fault: Fault) -> list[str]:
+        """Same detection rule as detected_outputs, from full good-machine net values."""
+        bad = self.simulate_faulty(good, fault)
+        return [po for po in self._pos
+                if good[po] != X and bad[po] != X and good[po] != bad[po]]

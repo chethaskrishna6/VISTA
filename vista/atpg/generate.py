@@ -88,9 +88,9 @@ def generate_test_set(circuit: Circuit, faults: list[Fault],
         idx = len(res.patterns)
         res.patterns.append(pattern)
         res.cubes.append(r.cube)
-        good = sim.outputs(pattern)
+        good = sim.simulate(pattern)
         for g in faults:                               # fault-simulate the new pattern
-            if g not in res.covered_by and sim.detected_outputs(pattern, g, good):
+            if g not in res.covered_by and sim.detected_from_good(good, g):
                 res.covered_by[g] = idx
         assert f in res.covered_by, f"PODEM/simulator disagree on {f.id}"
     return res
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # independent check: a separate code path must agree on what the patterns detect
     from vista.sim.pattern_sim import run_fault_simulation
-    rep = run_fault_simulation(c, faults, res.patterns, weights)
+    rep = run_fault_simulation(c, faults, res.patterns, weights, reference=True)
     resim = set(rep.detected)
     claimed = set(res.covered_by)
     print(f"independent re-simulation: {'AGREES' if resim == claimed else 'MISMATCH'} "
