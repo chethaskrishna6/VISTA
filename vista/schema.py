@@ -11,7 +11,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 MAJOR = SCHEMA_VERSION.split(".")[0]
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
@@ -112,6 +112,17 @@ SCHEMAS: dict[str, dict] = {
                               "coverage_preserved": _BOOL,
                               "origin": {"type": ["array", "null"], "items": _INT},
                               "items": _arr(_ITEM)}))}),
+    "loc_atpg_report": _doc("loc_atpg_report", {
+        "fault_model": _TRANSITION, "scheme": {"const": "launch_on_capture"},
+        "pi_mode": {"enum": ["held", "free"]}, "algorithm": _STR,
+        "pi_order": _STR_LIST, "vector_order": _STR_LIST,
+        "scan_cells": _arr(_obj({"q": _STR, "d": _STR})),
+        "summary": _obj({"total_faults": _INT, "detected": _INT, "untestable": _INT, "vectors": _INT,
+                         "untestable_reasons": {"type": "object", "additionalProperties": _INT},
+                         "coverage_pct": _NUM, "efficiency_pct": _NUM}),
+        "vectors": _arr(_obj({"index": _INT, "bits": _BITS, "v1": _BITS, "v2": _BITS})),
+        "faults": _arr(_obj({"id": _STR, "status": {"enum": ["detected", "untestable"]},
+                             "vector": _OPT_INT, "reason": _OPT_STR}))}),
 }
 
 
@@ -268,6 +279,42 @@ def _consistency(doc: dict) -> list[str]:
                     f"{nm}: origin must be strictly increasing indices into the baseline")
             need(all(set(it) == keys and all(len(it[k]) == width for k in keys) for it in m["items"]),
                 f"{nm}: an item has the wrong keys or is not len(pi_order) wide")
+    elif kind == "loc_atpg_report":
+        s, vs = doc["summary"], doc["vectors"]
+        n, w, vw = len(vs), len(doc["pi_order"]), len(doc["vector_order"])
+        det = [f for f in fs if f["status"] == "detected"]
+        unt = [f for f in fs if f["status"] == "untestable"]
+        need(s["total_faults"] == len(fs), "summary.total_faults disagrees with the fault list")
+        need(s["detected"] == len(det) and s["untestable"] == len(unt),
+             "summary.detected/untestable disagree with fault statuses")
+        need(s["untestable_reasons"] == dict(Counter(f["reason"] for f in unt)),
+             "untestable_reasons disagree with fault reasons")
+        need(s["vectors"] == n and [v["index"] for v in vs] == list(range(n)), "vector count/indices")
+        need(all((f["status"] == "detected") == (f["vector"] is not None)
+                 and (f["vector"] is None or f["vector"] < n) for f in fs),
+             "fault -> vector links are inconsistent")
+        need(all((f["status"] == "untestable") == (f["reason"] is not None) for f in fs),
+             "untestable faults must (only) carry a reason")
+        need(_close(s["coverage_pct"], _pct(len(det), len(fs))), "summary.coverage_pct disagrees")
+        need(_close(s["efficiency_pct"], _pct(len(det) + len(unt), len(fs))),
+             "summary.efficiency_pct disagrees")
+        pis, qs = doc["pi_order"], {c["q"] for c in doc["scan_cells"]}
+        need(qs <= set(pis), "a scan cell output is not in pi_order")
+        true_pis = [i for i, p in enumerate(pis) if p not in qs]
+        held = doc["pi_mode"] == "held"
+        want = pis if held else pis + [pis[i] + "@2" for i in true_pis]
+        need(doc["vector_order"] == want, "vector_order does not match pi_mode")
+        shaped = vw == len(want) and all(
+            len(v["bits"]) == vw and len(v["v1"]) == w and len(v["v2"]) == w for v in vs)
+        need(shaped, "a vector entry has the wrong width")
+        if shaped:
+            need(all(v["bits"][:w] == v["v1"] for v in vs), "frame-1 vector is not the start of bits")
+            if held:
+                need(all(v["v2"][i] == v["v1"][i] for v in vs for i in true_pis),
+                     "held mode: a primary input changes between frames")
+            else:
+                need(all(v["bits"][w + k] == v["v2"][i] for v in vs for k, i in enumerate(true_pis)),
+                     "free mode: frame-2 primary inputs disagree with bits")
     return bad
 
 

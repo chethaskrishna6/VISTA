@@ -17,6 +17,9 @@ from vista.rtl.loader import load_circuit
 from vista.schema import SCHEMA_VERSION, SCHEMAS, SchemaError, schema_for, strict, validate
 from vista.sim.pattern_sim import exhaustive_patterns, run_fault_simulation
 from vista.sim.transition_sim import run_transition_simulation
+from vista.atpg.loc import generate_loc_tests
+
+SEQ = "INPUT(a)\nOUTPUT(y)\nq = DFF(d)\nd = NAND(a, q)\ny = NOT(q)\n"
 
 ABSORB = "INPUT(a)\nINPUT(b)\nOUTPUT(y)\nn = AND(a, b)\ny = OR(a, n)\n"
 ALWAYS_ONE = "INPUT(a)\nOUTPUT(y)\nn = NOT(a)\ny = OR(a, n)\n"
@@ -33,6 +36,7 @@ def documents() -> dict[str, dict]:
     pairs = [(pats[i], pats[(i * 7 + 3) % 32]) for i in range(32)]
     sa_items, sa_det, sa_verify = prepare_stuck_at(c)
     td_items, td_det, td_verify = prepare_transition(c)
+    seq = parse_bench(SEQ, "seq", scan=True)
     return {
         "circuit": c.to_dict(),
         "fault_list/uncollapsed": universe_to_dict(c, faults),
@@ -52,6 +56,8 @@ def documents() -> dict[str, dict]:
         "compaction_report/compact_tdf": report_from_results(
             c, "transition", td_items, td_det, evaluate(len(td_items), td_det, td_verify)),
         "compaction_report/merge_tdf": report_from_merge(c, merge_transition(c)),
+        "loc_atpg_report/held": generate_loc_tests(seq, hold_pi=True).to_dict(),
+        "loc_atpg_report/free": generate_loc_tests(seq, hold_pi=False).to_dict(),
     }
 
 
@@ -87,6 +93,7 @@ def test_the_variants_really_exercise_the_interesting_paths():
     reasons = DOCS["transition_atpg_report/untestable"]["summary"]["untestable_reasons"]
     assert "cannot initialize" in reasons and "stuck-at redundant" in reasons
     assert DOCS["fault_list/collapsed"]["collapsed"] is True
+    assert "held primary input" in DOCS["loc_atpg_report/held"]["summary"]["untestable_reasons"]
 
 
 def test_schemas_are_valid_json_schema():
@@ -147,6 +154,12 @@ FLIP = str.maketrans("01", "10")
      lambda d: d["methods"][0].update(count=d["methods"][0]["count"] + 1), "count"),
     ("compaction_report/merge_tdf",
      lambda d: d["methods"][0].update(origin=[0]), "origin"),
+    ("loc_atpg_report/held", lambda d: d["summary"].update(detected=d["summary"]["detected"] + 1),
+     "summary.detected"),
+    ("loc_atpg_report/held",
+     lambda d: d["vectors"][0].update(v1=d["vectors"][0]["v1"].translate(FLIP)), "frame-1"),
+    ("loc_atpg_report/held",
+     lambda d: d["vectors"][0].update(v2=d["vectors"][0]["v2"].translate(FLIP)), "held mode"),
 ])
 def test_consistency_checks_catch_structurally_valid_lies(label, edit, needle):
     with pytest.raises(SchemaError, match=needle):

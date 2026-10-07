@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA loc_atpg_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "loc_atpg_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "transition"
+    },
+    "scheme": {
+      "const": "launch_on_capture"
+    },
+    "pi_mode": {
+      "enum": [
+        "held",
+        "free"
+      ]
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "vector_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scan_cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string"
+          },
+          "d": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "q",
+          "d"
+        ]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untestable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vectors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untestable_reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "coverage_pct": {
+          "type": "number"
+        },
+        "efficiency_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_faults",
+        "detected",
+        "untestable",
+        "vectors",
+        "untestable_reasons",
+        "coverage_pct",
+        "efficiency_pct"
+      ]
+    },
+    "vectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bits": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "v1": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "v2": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          }
+        },
+        "required": [
+          "index",
+          "bits",
+          "v1",
+          "v2"
+        ]
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "detected",
+              "untestable"
+            ]
+          },
+          "vector": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "vector",
+          "reason"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "scheme",
+    "pi_mode",
+    "algorithm",
+    "pi_order",
+    "vector_order",
+    "scan_cells",
+    "summary",
+    "vectors",
+    "faults"
+  ]
+}

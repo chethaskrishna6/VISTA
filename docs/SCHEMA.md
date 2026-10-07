@@ -18,6 +18,7 @@ Check any file: `vista schema validate file.json` (structure + cross-field consi
 | `transition_sim_report` | `vista tdf-sim --json` |
 | `transition_atpg_report` | `vista tdf-atpg --json` |
 | `compaction_report` | `vista compact --json`, `vista merge --json` |
+| `loc_atpg_report` | `vista loc-atpg --json` (added in 1.1) |
 
 ## Conventions
 - **Bit strings** (`bits`, `cube`, `v1`, `v2`): one character per PI, in `pi_order`; `0`, `1`, or `X` (don't-care).
@@ -40,3 +41,15 @@ Check any file: `vista schema validate file.json` (structure + cross-field consi
 - **Scan and PO buffers:** `.bench` flip-flops are converted to full scan (Q = pseudo-PI, D = pseudo-PO).
   A PO net that also feeds gates gets an observation buffer: gate and net `n$po`, which becomes the primary
   output. Its fault ids look like `n->n$po.0/SA0`. No schema change.
+- **`loc_atpg_report`:** launch-on-capture vectors. `bits` is over `vector_order` (the base `pi_order`, plus
+  `<pi>@2` for each true PI when `pi_mode` is `free`). `v1`/`v2` are the equivalent enhanced-scan pair over
+  `pi_order`: `v1` is the scan-loaded state and PIs, and `v2` has the launched state in the scan-cell
+  positions (`v2[q] = value of its D net in frame 1`). In `held` mode a true PI has the same value in both.
+  Untestable reasons are relative to those constraints.
+- **`vista matrix --model loc`** replays LOC vectors. The output is a `transition_sim_report` whose pair *i*
+  is the enhanced-scan equivalent of LOC vector *i*.
+
+## Changelog
+- 1.1: added `loc_atpg_report`.
+- 1.0: initial contract (circuit, fault_list, fault_sim_report, atpg_report, transition_sim_report,
+  transition_atpg_report, compaction_report).

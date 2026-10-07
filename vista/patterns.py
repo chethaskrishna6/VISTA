@@ -97,3 +97,34 @@ def _from_json(p: Path, circuit: Circuit, model: str, method: str | None) -> lis
         return [_vec(r["bits"], pis, f"{where} item {i}") for i, r in enumerate(rows)]
     return [(_vec(r["v1"], pis, f"{where} item {i}"), _vec(r["v2"], pis, f"{where} item {i}"))
             for i, r in enumerate(rows)]
+def read_loc_vectors(path: str | Path, model) -> list[Pattern]:
+    """LOC vectors over the expanded PIs of a LocModel: a text file (one bit string per line,
+    optional `# pi_order:` header listing the expanded PIs) or a loc_atpg_report .json."""
+    p = Path(path)
+    order = model.circuit.primary_inputs
+    mode = "held" if model.hold_pi else "free"
+    if p.suffix.lower() == ".json":
+        doc = json.loads(p.read_text())
+        kind = doc.get("document") if isinstance(doc, dict) else None
+        if kind != "loc_atpg_report":
+            raise PatternFileError(f"{p.name}: a {kind!r} document has no LOC vectors")
+        if doc["pi_mode"] != mode:
+            raise PatternFileError(f"{p.name}: report was made with PIs {doc['pi_mode']}, not {mode} "
+                                   "(add or drop --free-pi)")
+        if doc["vector_order"] != order:
+            raise PatternFileError(f"{p.name}: vector_order {doc['vector_order']} does not match {order}")
+        return [_vec(v["bits"], order, f"{p.name} vector {v['index']}") for v in doc["vectors"]]
+    items: list[Pattern] = []
+    for n, raw in enumerate(p.read_text().splitlines(), 1):
+        line = raw.strip()
+        if line.startswith("#"):
+            body = line[1:].strip()
+            if body.lower().startswith("pi_order:") and body.split(":", 1)[1].split() != order:
+                raise PatternFileError(f"{p.name}: pi_order header does not match the expanded PIs {order}")
+            continue
+        parts = line.split("#", 1)[0].split()
+        if parts:
+            if len(parts) != 1:
+                raise PatternFileError(f"{p.name} line {n}: expected 1 bit string, got {len(parts)}")
+            items.append(_vec(parts[0], order, f"{p.name} line {n}"))
+    return items

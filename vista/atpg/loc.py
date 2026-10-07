@@ -1,6 +1,10 @@
 """Engine 3 (part 7): launch-on-capture transition ATPG on the two-frame expansion (exact, SAT)."""
 from __future__ import annotations
+import json
+from pathlib import Path
 
+from vista.schema import SCHEMA_VERSION
+from vista.sim.logic import X, to_str
 import argparse
 import time
 from collections import Counter
@@ -62,7 +66,32 @@ class LocResult:
     @property
     def efficiency(self) -> float:
         return (len(self.covered_by) + len(self.untestable)) / len(self.faults) if self.faults else 1.0
-
+    def to_dict(self) -> dict:
+        m = self.model
+        pis, order = m.base.primary_inputs, m.circuit.primary_inputs
+        enc = lambda p, names: to_str([p.get(n, X) for n in names])
+        vectors = []
+        for i, v in enumerate(self.vectors):
+            v1, v2 = m.pair_of(v)                    # the enhanced-scan equivalent, via the base circuit
+            vectors.append({"index": i, "bits": enc(v, order), "v1": enc(v1, pis), "v2": enc(v2, pis)})
+        n = len(self.faults)
+        return {
+            "schema_version": SCHEMA_VERSION, "document": "loc_atpg_report", "circuit": m.base.name,
+            "fault_model": "transition", "scheme": "launch_on_capture",
+            "pi_mode": "held" if m.hold_pi else "free", "algorithm": "sat",
+            "pi_order": pis, "vector_order": order,
+            "scan_cells": [{"q": q, "d": d} for q, d in m.base.scan_cells],
+            "summary": {"total_faults": n, "detected": len(self.covered_by),
+                        "untestable": len(self.untestable), "vectors": len(self.vectors),
+                        "untestable_reasons": dict(Counter(self.untestable.values())),
+                        "coverage_pct": round(100 * self.coverage, 2),
+                        "efficiency_pct": round(100 * self.efficiency, 2)},
+            "vectors": vectors,
+            "faults": [{"id": f.id,
+                        "status": "detected" if f in self.covered_by else "untestable",
+                        "vector": self.covered_by.get(f), "reason": self.untestable.get(f)}
+                       for f in self.faults],
+        }
 
 def generate_loc_tests(c: Circuit, faults: list[TransitionFault] | None = None,
                        hold_pi: bool = True) -> LocResult:
@@ -114,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="frame-2 PIs get their own bits (default: PIs held constant)")
     ap.add_argument("--compare", action="store_true", help="also run enhanced-scan ATPG and compare")
     ap.add_argument("--no-verify", action="store_true")
+    ap.add_argument("--json", metavar="FILE")
     args = ap.parse_args(argv)
 
     c = load_circuit(args.netlist)
@@ -144,6 +174,10 @@ def main(argv: list[str] | None = None) -> int:
         ok = reference_agrees(c, res)
         print(f"independent re-simulation: {'AGREES' if ok else 'MISMATCH <-- BUG'} ({len(res.covered_by)} detected)")
         rc |= 0 if ok else 1
+    if args.json:
+        Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json).write_text(json.dumps(res.to_dict(), indent=2))
+        print(f"report written to {args.json}")
     return rc
 
 

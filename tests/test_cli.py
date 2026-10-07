@@ -11,6 +11,7 @@ CASES = {
     "tdf-atpg": (["tdf-atpg", "benchmarks/c17.bench"], "transition_atpg_report"),
     "fsim": (["fsim", "benchmarks/c17.bench", "--exhaustive", "--no-drop"], "fault_sim_report"),
     "tdf-sim": (["tdf-sim", "benchmarks/c17.bench", "--count", "30"], "transition_sim_report"),
+    "loc-atpg": (["loc-atpg", "benchmarks/s27.bench"], "loc_atpg_report"),
 }
 
 
