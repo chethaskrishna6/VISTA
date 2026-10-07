@@ -4,7 +4,8 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-
+from vista.atpg.compact import evaluate, prepare_stuck_at, prepare_transition, report_from_results
+from vista.atpg.merge import report_from_merge, run_transition as merge_transition
 from vista.atpg.generate import generate_test_set
 from vista.atpg.hybrid import run_hybrid
 from vista.atpg.transition_atpg import generate_transition_tests
@@ -30,6 +31,8 @@ def documents() -> dict[str, dict]:
     pats = exhaustive_patterns(c)
     absorb = parse_bench(ABSORB, "absorb")
     pairs = [(pats[i], pats[(i * 7 + 3) % 32]) for i in range(32)]
+    sa_items, sa_det, sa_verify = prepare_stuck_at(c)
+    td_items, td_det, td_verify = prepare_transition(c)
     return {
         "circuit": c.to_dict(),
         "fault_list/uncollapsed": universe_to_dict(c, faults),
@@ -44,6 +47,11 @@ def documents() -> dict[str, dict]:
         "transition_atpg_report/c17": generate_transition_tests(c).to_dict(),
         "transition_atpg_report/untestable": generate_transition_tests(
             parse_bench(ALWAYS_ONE, "one")).to_dict(),
+        "compaction_report/compact_sa": report_from_results(
+            c, "stuck-at", sa_items, sa_det, evaluate(len(sa_items), sa_det, sa_verify)),
+        "compaction_report/compact_tdf": report_from_results(
+            c, "transition", td_items, td_det, evaluate(len(td_items), td_det, td_verify)),
+        "compaction_report/merge_tdf": report_from_merge(c, merge_transition(c)),
     }
 
 
@@ -135,6 +143,10 @@ FLIP = str.maketrans("01", "10")
     ("fault_list/collapsed", lambda d: d["faults"][0].update(class_size=99), "class_size"),
     ("transition_atpg_report/c17",
      lambda d: d["pairs"][0].update(v1=d["pairs"][0]["v1"].translate(FLIP)), "not a fill"),
+    ("compaction_report/compact_sa",
+     lambda d: d["methods"][0].update(count=d["methods"][0]["count"] + 1), "count"),
+    ("compaction_report/merge_tdf",
+     lambda d: d["methods"][0].update(origin=[0]), "origin"),
 ])
 def test_consistency_checks_catch_structurally_valid_lies(label, edit, needle):
     with pytest.raises(SchemaError, match=needle):

@@ -56,7 +56,7 @@ _FAULT_LIST = _doc(
 _FAULT_LIST["if"] = {"properties": {"collapsed": {"const": True}}}
 _FAULT_LIST["then"] = {"required": ["collapse_method", "total_uncollapsed"],
                        "properties": {"faults": _arr(_CLASS_ITEM)}}
-
+_ITEM = _obj({}, {"bits": _BITS, "v1": _BITS, "v2": _BITS})
 SCHEMAS: dict[str, dict] = {
     "circuit": _doc("circuit", {
         "primary_inputs": _STR_LIST, "primary_outputs": _STR_LIST,
@@ -101,6 +101,17 @@ SCHEMAS: dict[str, dict] = {
                             "cube1": _BITS, "cube2": _BITS})),
         "faults": _arr(_obj({"id": _STR, "status": {"enum": ["detected", "untestable"]},
                              "pair": _OPT_INT, "reason": _OPT_STR}))}),
+    "compaction_report": _doc("compaction_report", {
+        "fault_model": {"enum": ["stuck_at", "transition"]},
+        "source": {"enum": ["static_compaction", "cube_merging"]},
+        "unit": {"enum": ["pattern", "pair"]},
+        "pi_order": _STR_LIST,
+        "baseline": _obj({"description": _STR, "items": _INT,
+                          "faults_total": _INT, "faults_detected": _INT}),
+        "methods": _arr(_obj({"name": _STR, "count": _INT, "removed_pct": _NUM,
+                              "coverage_preserved": _BOOL,
+                              "origin": {"type": ["array", "null"], "items": _INT},
+                              "items": _arr(_ITEM)}))}),
 }
 
 
@@ -239,6 +250,24 @@ def _consistency(doc: dict) -> list[str]:
         need(_close(s["coverage_pct"], _pct(len(det), len(fs))), "summary.coverage_pct disagrees")
         need(_close(s["efficiency_pct"], _pct(len(det) + len(unt), len(fs))),
              "summary.efficiency_pct disagrees")
+    elif kind == "compaction_report":
+        b, width = doc["baseline"], len(doc["pi_order"])
+        stuck = doc["fault_model"] == "stuck_at"
+        keys = {"bits"} if stuck else {"v1", "v2"}
+        need(doc["unit"] == ("pattern" if stuck else "pair"), "unit does not match fault_model")
+        need(b["faults_detected"] <= b["faults_total"], "baseline.faults_detected > faults_total")
+        for m in doc["methods"]:
+            nm, o = m["name"], m["origin"]
+            need(m["count"] == len(m["items"]), f"{nm}: count != len(items)")
+            want = 100.0 * (1 - m["count"] / b["items"]) if b["items"] else 0.0
+            need(_close(m["removed_pct"], want), f"{nm}: removed_pct disagrees with count/baseline.items")
+            need((o is not None) == (doc["source"] == "static_compaction"),
+                f"{nm}: origin must be given exactly for static_compaction")
+            if o is not None:
+                need(len(o) == m["count"] and o == sorted(set(o)) and all(i < b["items"] for i in o),
+                    f"{nm}: origin must be strictly increasing indices into the baseline")
+            need(all(set(it) == keys and all(len(it[k]) == width for k in keys) for it in m["items"]),
+                f"{nm}: an item has the wrong keys or is not len(pi_order) wide")
     return bad
 
 

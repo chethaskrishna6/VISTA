@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA compaction_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "compaction_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "enum": [
+        "stuck_at",
+        "transition"
+      ]
+    },
+    "source": {
+      "enum": [
+        "static_compaction",
+        "cube_merging"
+      ]
+    },
+    "unit": {
+      "enum": [
+        "pattern",
+        "pair"
+      ]
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "faults_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "faults_detected": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "description",
+        "items",
+        "faults_total",
+        "faults_detected"
+      ]
+    },
+    "methods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "removed_pct": {
+            "type": "number"
+          },
+          "coverage_preserved": {
+            "type": "boolean"
+          },
+          "origin": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bits": {
+                  "type": "string",
+                  "pattern": "^[01X]*$"
+                },
+                "v1": {
+                  "type": "string",
+                  "pattern": "^[01X]*$"
+                },
+                "v2": {
+                  "type": "string",
+                  "pattern": "^[01X]*$"
+                }
+              },
+              "required": []
+            }
+          }
+        },
+        "required": [
+          "name",
+          "count",
+          "removed_pct",
+          "coverage_preserved",
+          "origin",
+          "items"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "source",
+    "unit",
+    "pi_order",
+    "baseline",
+    "methods"
+  ]
+}

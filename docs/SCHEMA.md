@@ -17,6 +17,7 @@ Check any file: `vista schema validate file.json` (structure + cross-field consi
 | `atpg_report` | `vista atpg --json` (add `--hybrid` for the SAT fallback) |
 | `transition_sim_report` | `vista tdf-sim --json` |
 | `transition_atpg_report` | `vista tdf-atpg --json` |
+| `compaction_report` | `vista compact --json`, `vista merge --json` |
 
 ## Conventions
 - **Bit strings** (`bits`, `cube`, `v1`, `v2`): one character per PI, in `pi_order`; `0`, `1`, or `X` (don't-care).
@@ -29,6 +30,10 @@ Check any file: `vista schema validate file.json` (structure + cross-field consi
   `summary.aborted` counts every PODEM give-up, including faults a later pattern happened to detect,
   so `summary.aborted >= number of faults with status "aborted"`.
 - `algorithm` is informational; don't branch on it.
-
-## Not in 1.0 yet
-Compaction results (kept indices) and a detection-matrix export for an arbitrary pattern set.
+- **Detection matrix:** `vista matrix` simulates any pattern set (text file, or a VISTA report's patterns)
+  without fault dropping. The matrix is the `detecting_patterns` / `detecting_pairs` list of each fault in the
+  `fault_sim_report` / `transition_sim_report` it writes.
+- **`compaction_report`:** `methods[].items` is the compacted test set (bit strings as above).
+  `origin` gives indices into the baseline set, and only for `static_compaction`; `cube_merging` builds
+  new patterns, so `origin` is null. `baseline.items` is the size `removed_pct` is measured against.
+  `coverage_preserved` was checked by an independent simulator.

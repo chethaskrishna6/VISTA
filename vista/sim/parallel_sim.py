@@ -6,7 +6,8 @@ from vista.rtl.model import Circuit, GateType
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import INVERTING, ONE, X, ZERO
 from vista.sim.pattern_sim import SimReport
-
+from vista.faults.transition import TransitionFault
+from vista.sim.transition_sim import TransitionReport
 Planes = tuple[int, int]          # (p1, p0): bit i of p1 = pattern i is 1, of p0 = pattern i is 0
 AND_FAM = (GateType.AND, GateType.NAND)
 OR_FAM = (GateType.OR, GateType.NOR)
@@ -122,3 +123,31 @@ def run_packed_fault_simulation(circuit: Circuit, faults: list[Fault],
     w = {f: (weights or {}).get(f, 1) for f in faults}
     return SimReport(circuit.name, circuit.primary_inputs, circuit.primary_outputs,
                      patterns, faults, w, drop, detections)
+def run_packed_transition_simulation(circuit: Circuit, faults: list[TransitionFault],
+                                     pairs: list, drop: bool = True,
+                                     block: int = 64) -> TransitionReport:
+    """Drop-in for run_transition_simulation: same report, same detection indices."""
+    if block < 1:
+        raise ValueError("block must be >= 1")
+    sim = PackedSimulator(circuit)
+    detections: dict[TransitionFault, list[int]] = {f: [] for f in faults}
+    active = list(faults)
+    for start in range(0, len(pairs), block):
+        chunk = pairs[start:start + block]
+        g1, mask = sim.good([a for a, _ in chunk])
+        g2, _ = sim.good([b for _, b in chunk])
+        keep = []
+        for f in active:
+            p1, p0 = g1[f.net]
+            init = p1 if f.init_value else p0            # pairs whose frame 1 initializes the site
+            m = (init & sim.detect_mask(g2, f.stuck, mask)) if init else 0
+            if m:
+                idxs = _set_bits(m)
+                detections[f].extend(start + i for i in (idxs[:1] if drop else idxs))
+                if drop:
+                    continue
+            keep.append(f)
+        active = keep
+        if not active:
+            break
+    return TransitionReport(circuit.name, circuit.primary_inputs, pairs, faults, detections, drop)

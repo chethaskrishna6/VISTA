@@ -13,6 +13,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "compact": ("vista.atpg.compact", "static compaction (reverse-order, greedy cover)"),
     "merge": ("vista.atpg.merge", "cube-merging compaction"),
     "schema": ("vista.schema", "export or validate the JSON contract"),
+    "matrix": ("vista.matrix", "detection matrix for a given pattern set"),
 }
 
 

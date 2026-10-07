@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import random
-from dataclasses import dataclass
-
-from vista.atpg.compact import greedy_cover
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from vista.atpg.compact import compaction_to_dict, greedy_cover
 from vista.atpg.justify import Justifier
 from vista.atpg.podem import Outcome, PodemEngine
 from vista.atpg.sat import SatAtpg
@@ -109,6 +110,8 @@ class MergeReport:
     matrix_ok: bool         # merged set detects exactly the testable faults (fast simulator)
     preserved: bool         # kept set detects them too (slow reference simulator)
     sat_calls: int
+    merged_items: list = field(default_factory=list)
+    final_items: list = field(default_factory=list)
 
 
 def run_stuck_at(c: Circuit, limit: int = 100, fill: str = "random", seed: int = 1) -> MergeReport:
@@ -132,7 +135,7 @@ def run_stuck_at(c: Circuit, limit: int = 100, fill: str = "random", seed: int =
     ref = run_fault_simulation(c, faults, [patterns[i] for i in kept], reference=True)
     return MergeReport(c.name, "stuck-at", "patterns", len(targets), len(faults) - len(targets),
                        len(patterns), len(kept), matrix_ok, set(ref.detected) == set(targets),
-                       fac.sat_calls)
+                       fac.sat_calls, merged_items=patterns, final_items=[patterns[i] for i in kept])
 
 
 def run_transition(c: Circuit, limit: int = 100, fill: str = "random", seed: int = 1) -> MergeReport:
@@ -163,8 +166,13 @@ def run_transition(c: Circuit, limit: int = 100, fill: str = "random", seed: int
     kept = greedy_cover(len(items), det)
     preserved = reference_detected(c, faults, [items[i] for i in kept]) == set(targets)
     return MergeReport(c.name, "transition", "pairs", len(targets), len(untestable),
-                       len(items), len(kept), matrix_ok, preserved, fac.sat_calls)
-
+                       len(items), len(kept), matrix_ok, preserved, fac.sat_calls, merged_items=items, final_items=[items[i] for i in kept])
+def report_from_merge(c: Circuit, r: MergeReport) -> dict:
+    base = {"description": "one cube per testable fault, before merging", "items": r.targets,
+            "faults_total": r.targets + r.untestable, "faults_detected": r.targets}
+    return compaction_to_dict(c.name, r.model, "cube_merging", c.primary_inputs, base,
+                              [("merging", r.merged_items, None, r.matrix_ok),
+                               ("merging + greedy", r.final_items, None, r.preserved)])
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="VISTA cube-merging compaction")
@@ -173,6 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--fill", choices=("0", "1", "random"), default="random")
     ap.add_argument("--limit", type=int, default=100)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--json", metavar="FILE")
     args = ap.parse_args(argv)
     c = load_circuit(args.netlist)
     run = run_stuck_at if args.model == "stuck-at" else run_transition
@@ -185,7 +194,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  merging + greedy    : {r.kept} {r.unit} ({pct(r.kept):.1f}% fewer)")
     print(f"  merged set detects exactly the testable faults: {'YES' if r.matrix_ok else 'NO  <-- BUG'}")
     print(f"  coverage preserved after greedy (slow oracle) : {'YES' if r.preserved else 'NO  <-- BUG'}")
-
+    if args.json:
+        Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json).write_text(json.dumps(report_from_merge(c, r), indent=2))
+        print(f"report written to {args.json}")
 
 if __name__ == "__main__":
     main()
