@@ -37,3 +37,6 @@ Check any file: `vista schema validate file.json` (structure + cross-field consi
   `origin` gives indices into the baseline set, and only for `static_compaction`; `cube_merging` builds
   new patterns, so `origin` is null. `baseline.items` is the size `removed_pct` is measured against.
   `coverage_preserved` was checked by an independent simulator.
+- **Scan and PO buffers:** `.bench` flip-flops are converted to full scan (Q = pseudo-PI, D = pseudo-PO).
+  A PO net that also feeds gates gets an observation buffer: gate and net `n$po`, which becomes the primary
+  output. Its fault ids look like `n->n$po.0/SA0`. No schema change.

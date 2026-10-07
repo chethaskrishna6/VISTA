@@ -24,6 +24,8 @@ def circuit_stats(c: Circuit) -> dict:
         "max_fanout": max(len(n.fanout) for n in c.nets.values()),
         "stems": len(c.stems),
         "po_fanout": c.po_with_fanout,
+        "scan_cells": len(c.scan_cells),
+        "po_buffers": c.po_buffers,
     }
 
 

@@ -56,6 +56,8 @@ class Circuit:
         self.gates: dict[str, Gate] = {}
         self._level_cache: dict[str, int] | None = None
         self._order_cache: list[Gate] | None = None
+        self.scan_cells: list[tuple[str, str]] = []   # (Q net, D net) per flip-flop, from scan conversion
+        self.po_buffers: list[str] = []               # observation buffers added by isolate_po_fanout
     # ---- construction -------------------------------------------------
     def net(self, name: str) -> Net:
         """Get-or-create a net."""
