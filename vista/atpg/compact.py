@@ -52,13 +52,13 @@ def prepare_stuck_at(c, limit: int = 100, fill: int = 0):
     from vista.faults.collapse import collapse_equivalent
     from vista.faults.stuck_at import generate_stuck_at_faults
     from vista.sim.pattern_sim import run_fault_simulation
-
+    from vista.sim.parallel_sim import run_packed_fault_simulation
     col = collapse_equivalent(c, generate_stuck_at_faults(c))
     faults = col.representatives
     w = {r: len(m) for r, m in col.classes.items()}
     res = run_hybrid(c, faults, w, limit, fill)
     items = res.patterns
-    det = run_fault_simulation(c, faults, items, w, drop=False).detections
+    det = run_packed_fault_simulation(c, faults, items, w, drop=False).detections
     assert {f for f, i in det.items() if i} == set(res.covered_by), "matrix disagrees with ATPG"
 
     def verify(kept: list[int]) -> set:
@@ -72,11 +72,11 @@ def prepare_transition(c, limit: int = 100, fill: str = "random", seed: int = 1)
     from vista.atpg.transition_atpg import generate_transition_tests, reference_detected
     from vista.faults.transition import generate_transition_faults
     from vista.sim.transition_sim import run_transition_simulation
-
+    from vista.sim.parallel_sim import run_packed_transition_simulation
     faults = generate_transition_faults(c)
     res = generate_transition_tests(c, faults, limit, fill, seed)
     items = res.pairs
-    det = run_transition_simulation(c, faults, items, drop=False).detections
+    det = run_packed_transition_simulation(c, faults, items, drop=False).detections
     assert {f for f, i in det.items() if i} == set(res.covered_by), "matrix disagrees with ATPG"
 
     def verify(kept: list[int]) -> set:

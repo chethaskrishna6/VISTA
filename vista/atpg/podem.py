@@ -10,7 +10,7 @@ from vista.rtl.model import Circuit, Gate, GateType
 from vista.rtl.parser import VerilogParser
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import CONTROLLING, INVERTING, X, from_str, non_controlling
-
+from vista.sim.incremental import IncrementalSimulator
 Objective = tuple[str, int]          # (net, desired good-machine value)
 SCOAP_PARTS = frozenset({"backtrace", "frontier", "side"})
 
@@ -44,15 +44,22 @@ class PodemEngine:
         self.use = frozenset(use)               # which SCOAP components are active
         self._sim = SerialFaultSimulator(circuit)
         self._order = circuit.gates_in_topo_order()
-
+        self._inc = IncrementalSimulator(circuit, self._order)
+        self._cone = self._sim.cone_for(fault)
+        fl = self.fault
+        live = {g.output for g in self._cone} | (set() if fl.is_branch else {fl.net})
+        forced = fl.gate if fl.is_branch else None
+        # (gate, input nets that can carry an effect, is this the branch-forced gate)
+        self._frontier_plan = [(g, tuple(n for n in g.inputs if n in live), g.name == forced)
+                               for g in self._cone]   # gates that can ever see a fault effect
     def _on(self, part: str) -> bool:
         return self.scoap is not None and part in self.use
 
     # ---- implication: forward-simulate the (good, faulty) pair --------
     def imply(self, assignment: dict[str, int]) -> dict[str, Pair]:
         """Net -> (good, faulty). Unassigned PIs are X."""
-        good = self._sim.simulate(assignment)
-        bad = self._sim.simulate_faulty(good, self.fault)
+        good = self._inc.update(assignment)               # event-driven, from the previous state
+        bad = self._sim.simulate_faulty(good, self.fault)  # copies `good`, then walks the cone
         return {n: (good[n], bad[n]) for n in good}
 
     def pin_pair(self, values: dict[str, Pair], gate: Gate, pin: int) -> Pair:
@@ -66,8 +73,27 @@ class PodemEngine:
     # ---- status queries ------------------------------------------------
     def detected(self, values: dict[str, Pair]) -> bool:
         return any(is_effect(values[po]) for po in self.circuit.primary_outputs)
-
     def d_frontier(self, values: dict[str, Pair]) -> list[Gate]:
+        """Cone gates with an undetermined output and a fault effect on some input pin.
+        Same contents and order as d_frontier_reference."""
+        frontier = []
+        for g, live_inputs, is_forced in self._frontier_plan:
+            o = values[g.output]
+            if o[0] != X and o[1] != X:                  # output fully known: not on the frontier
+                continue
+            if is_forced:                                # the one gate whose pin is overridden
+                hit = any(is_effect(self.pin_pair(values, g, i)) for i in range(len(g.inputs)))
+            else:
+                hit = False
+                for n in live_inputs:
+                    p = values[n]
+                    if p[0] != p[1] and p[0] != X and p[1] != X:   # inlined is_effect
+                        hit = True
+                        break
+            if hit:
+                frontier.append(g)
+        return frontier
+    def d_frontier_reference(self, values: dict[str, Pair]) -> list[Gate]:
         """Gates with an undetermined output and a fault effect on some input pin."""
         frontier = []
         for g in self._order:

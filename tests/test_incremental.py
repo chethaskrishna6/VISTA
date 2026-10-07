@@ -9,6 +9,50 @@ from vista.rtl.loader import load_circuit
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import X
 from vista.sim.pattern_sim import random_patterns, run_fault_simulation
+from vista.atpg.podem import PodemEngine
+from vista.sim.incremental import IncrementalSimulator
+
+
+def random_walk(c, steps, seed):
+    """Assignments that add, flip and remove PIs, like PODEM's decision stack does."""
+    rng, cur = random.Random(seed), {}
+    pis = c.primary_inputs
+    for _ in range(steps):
+        pi = rng.choice(pis)
+        move = rng.random()
+        if move < 0.25:
+            cur.pop(pi, None)
+        else:
+            cur[pi] = rng.getrandbits(1)
+        if rng.random() < 0.05:
+            cur = {}
+        yield dict(cur)
+
+
+@pytest.mark.parametrize("path,steps", [("benchmarks/c17.bench", 300), ("benchmarks/c432.bench", 150)])
+def test_incremental_equals_full_simulation_along_random_walks(path, steps):
+    c = load_or_skip(path)
+    inc, full = IncrementalSimulator(c), SerialFaultSimulator(c)
+    for a in random_walk(c, steps, seed=21):
+        assert inc.update(a) == full.simulate(a), a
+
+
+def test_incremental_validation():
+    c = load_circuit("benchmarks/c17.bench")
+    inc = IncrementalSimulator(c)
+    with pytest.raises(ValueError):
+        inc.update({"nope": 1})
+    with pytest.raises(ValueError):
+        inc.update({"1": 5})
+
+
+def test_engine_imply_matches_full_simulation_in_sequence():
+    c = load_circuit("benchmarks/c17.bench")
+    for f in generate_stuck_at_faults(c):
+        e, ref = PodemEngine(c, f), SerialFaultSimulator(c)
+        for a in random_walk(c, 60, seed=4):
+            good, bad = ref.simulate(a), ref.simulate(a, f)
+            assert e.imply(a) == {n: (good[n], bad[n]) for n in good}, (f.id, a)
 
 
 def mixed_patterns(circuit, n, seed):

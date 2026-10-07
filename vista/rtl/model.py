@@ -54,12 +54,14 @@ class Circuit:
         self.name = name
         self.nets: dict[str, Net] = {}
         self.gates: dict[str, Gate] = {}
-
+        self._level_cache: dict[str, int] | None = None
+        self._order_cache: list[Gate] | None = None
     # ---- construction -------------------------------------------------
     def net(self, name: str) -> Net:
         """Get-or-create a net."""
         if name not in self.nets:
             self.nets[name] = Net(name)
+            self._invalidate()
         return self.nets[name]
 
     def mark_pi(self, name: str) -> None:
@@ -84,11 +86,15 @@ class Circuit:
             )
         gate = Gate(name, gtype, output, list(inputs))
         self.gates[name] = gate
+        self._invalidate()
         out_net.driver = name
         for n in inputs:
             self.net(n).fanout.append(name)
         return gate
-
+    def _invalidate(self) -> None:
+        """Drop cached topology. Called on every structural change."""
+        self._level_cache = None
+        self._order_cache = None
     # ---- queries ------------------------------------------------------
     @property
     def primary_inputs(self) -> list[str]:
@@ -126,19 +132,26 @@ class Circuit:
                 g.add_edge(src, gate.output, gate=gate.name)
         return g
 
+    def _levels(self) -> dict[str, int]:
+        if self._level_cache is None:
+            g = self.to_networkx()
+            level: dict[str, int] = {}
+            for n in nx.topological_sort(g):
+                preds = list(g.predecessors(n))
+                level[n] = 0 if not preds else 1 + max(level[p] for p in preds)
+            self._level_cache = level
+        return self._level_cache
+
     def levelize(self) -> dict[str, int]:
-        """Net name -> logic level (PIs = 0)."""
-        g = self.to_networkx()
-        level: dict[str, int] = {}
-        for n in nx.topological_sort(g):
-            preds = list(g.predecessors(n))
-            level[n] = 0 if not preds else 1 + max(level[p] for p in preds)
-        return level
+        """Net name -> logic level (PIs = 0). Cached; returns a copy."""
+        return dict(self._levels())
 
     def gates_in_topo_order(self) -> list[Gate]:
-        """Gates sorted so every gate appears after all gates feeding it."""
-        lvl = self.levelize()
-        return sorted(self.gates.values(), key=lambda g: (lvl[g.output], g.name))
+        """Gates sorted so every gate appears after all gates feeding it. Cached; returns a copy."""
+        if self._order_cache is None:
+            lvl = self._levels()
+            self._order_cache = sorted(self.gates.values(), key=lambda g: (lvl[g.output], g.name))
+        return list(self._order_cache)
 
     # ---- export (JSON contract for Member 2) --------------------------
     def to_dict(self) -> dict:

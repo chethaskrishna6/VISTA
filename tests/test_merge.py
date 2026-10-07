@@ -66,3 +66,9 @@ def test_c432_reports(run):
     r = run(load_circuit("benchmarks/c432.bench"))
     assert r.matrix_ok and r.preserved
     assert r.kept <= r.merged < r.targets
+def test_cone_check_agrees_with_reference_check():
+    c = load_circuit("benchmarks/c17.bench")
+    for run in (run_stuck_at, run_transition):
+        a, b = run(c, check="reference"), run(c, check="cone")
+        assert (a.merged, a.kept, a.matrix_ok, a.preserved) == (b.merged, b.kept, b.matrix_ok, b.preserved)
+        assert a.final_items == b.final_items
