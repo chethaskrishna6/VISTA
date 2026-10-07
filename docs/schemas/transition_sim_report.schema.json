@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA transition_sim_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "transition_sim_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "transition"
+    },
+    "fault_dropping": {
+      "type": "boolean"
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "undetected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_faults",
+        "detected",
+        "undetected",
+        "coverage_pct"
+      ]
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "v1": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "v2": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          }
+        },
+        "required": [
+          "index",
+          "v1",
+          "v2"
+        ]
+      }
+    },
+    "coverage_curve": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "detected": {
+            "type": "boolean"
+          },
+          "first_detect": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "detecting_pairs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "id",
+          "detected",
+          "first_detect",
+          "detecting_pairs"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "fault_dropping",
+    "pi_order",
+    "summary",
+    "pairs",
+    "coverage_curve",
+    "faults"
+  ]
+}

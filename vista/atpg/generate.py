@@ -1,5 +1,7 @@
 """Engine 3 driver: PODEM + fault dropping -> test set."""
 from __future__ import annotations
+
+from vista.schema import SCHEMA_VERSION
 import time
 import argparse
 import json
@@ -58,12 +60,13 @@ class AtpgResult:
 
     def to_dict(self) -> dict:
         return {
-            "schema_version": "0.1", "circuit": self.circuit, "fault_model": "stuck_at",
+            "schema_version": SCHEMA_VERSION, "document": "atpg_report", "circuit": self.circuit, "fault_model": "stuck_at",
             "algorithm": "podem", "pi_order": self.pi_order,
             "summary": {
                 "total_faults": len(self.faults), "detected": len(self.covered_by),
                 "redundant": len(self.redundant), "aborted": len(self.aborted),
                 "patterns": len(self.patterns),
+                "sat_patterns": self.sat_patterns,
                 "weighted_coverage_pct": round(100 * self.coverage, 2),
                 "weighted_efficiency_pct": round(100 * self.efficiency, 2),
             },

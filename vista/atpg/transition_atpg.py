@@ -1,6 +1,8 @@
 """Engine 3 (part 4): transition-fault ATPG (independent frames) = justify V1 + stuck-at test V2."""
 from __future__ import annotations
 
+from vista.schema import SCHEMA_VERSION
+
 import argparse
 import json
 import random
@@ -51,7 +53,7 @@ class TdfAtpgResult:
 
     def to_dict(self) -> dict:
         return {
-            "schema_version": "0.1", "circuit": self.circuit, "fault_model": "transition",
+            "schema_version": SCHEMA_VERSION, "document": "transition_atpg_report", "circuit": self.circuit, "fault_model": "transition",
             "algorithm": "podem+justify+sat", "pi_order": self.pi_order,
             "summary": {"total_faults": len(self.faults), "detected": len(self.covered_by),
                         "untestable": len(self.untestable), "pairs": len(self.pairs),

@@ -1,6 +1,8 @@
 """Engine 4 (part 3): two-pattern (V1, V2) transition-fault simulation."""
 from __future__ import annotations
 
+from vista.schema import SCHEMA_VERSION
+
 import argparse
 import json
 from dataclasses import dataclass
@@ -71,7 +73,7 @@ class TransitionReport:
 
     def to_dict(self) -> dict:
         return {
-            "schema_version": "0.1", "circuit": self.circuit, "fault_model": "transition",
+            "schema_version": SCHEMA_VERSION, "document": "transition_sim_report", "circuit": self.circuit, "fault_model": "transition",
             "fault_dropping": self.drop, "pi_order": self.pi_order,
             "summary": {"total_faults": len(self.faults), "detected": len(self.detected),
                         "undetected": len(self.undetected),

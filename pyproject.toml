@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vista-eda"
+version = "0.2.0"          # package version; the JSON schema has its own version (vista/schema.py)
+description = "VISTA core EDA engines: netlist analysis, fault models, ATPG, fault simulation"
+requires-python = ">=3.11"
+dependencies = ["pyverilog", "networkx", "python-sat", "jsonschema"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+vista = "vista.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vista*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA fault_list (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "fault_list"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "stuck_at"
+    },
+    "collapsed": {
+      "type": "boolean"
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "net": {
+            "type": "string"
+          },
+          "stuck_at": {
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "kind": {
+            "enum": [
+              "stem",
+              "branch"
+            ]
+          },
+          "gate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pin": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "class_size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "equivalent_faults": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "net",
+          "stuck_at",
+          "kind",
+          "gate",
+          "pin"
+        ]
+      }
+    },
+    "collapse_method": {
+      "type": "string"
+    },
+    "total_uncollapsed": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "collapsed",
+    "total",
+    "faults"
+  ],
+  "if": {
+    "properties": {
+      "collapsed": {
+        "const": true
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "collapse_method",
+      "total_uncollapsed"
+    ],
+    "properties": {
+      "faults": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "net": {
+              "type": "string"
+            },
+            "stuck_at": {
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "kind": {
+              "enum": [
+                "stem",
+                "branch"
+              ]
+            },
+            "gate": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pin": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "class_size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "equivalent_faults": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "net",
+            "stuck_at",
+            "kind",
+            "gate",
+            "pin",
+            "class_size",
+            "equivalent_faults"
+          ]
+        }
+      }
+    }
+  }
+}

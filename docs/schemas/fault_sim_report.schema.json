@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA fault_sim_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "fault_sim_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "stuck_at"
+    },
+    "fault_dropping": {
+      "type": "boolean"
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "po_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "undetected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_pct": {
+          "type": "number"
+        },
+        "weighted_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_coverage_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_faults",
+        "detected",
+        "undetected",
+        "coverage_pct",
+        "weighted_total",
+        "weighted_detected",
+        "weighted_coverage_pct"
+      ]
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bits": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "new_detections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "index",
+          "bits",
+          "new_detections"
+        ]
+      }
+    },
+    "coverage_curve": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class_size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "detected": {
+            "type": "boolean"
+          },
+          "first_detect": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "detecting_patterns": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "id",
+          "class_size",
+          "detected",
+          "first_detect",
+          "detecting_patterns"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "fault_dropping",
+    "pi_order",
+    "po_order",
+    "summary",
+    "patterns",
+    "coverage_curve",
+    "faults"
+  ]
+}

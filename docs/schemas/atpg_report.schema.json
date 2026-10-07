@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA atpg_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "atpg_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "stuck_at"
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redundant": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "aborted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "patterns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_coverage_pct": {
+          "type": "number"
+        },
+        "weighted_efficiency_pct": {
+          "type": "number"
+        },
+        "sat_patterns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "total_faults",
+        "detected",
+        "redundant",
+        "aborted",
+        "patterns",
+        "weighted_coverage_pct",
+        "weighted_efficiency_pct"
+      ]
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bits": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "cube": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          }
+        },
+        "required": [
+          "index",
+          "bits",
+          "cube"
+        ]
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class_size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "detected",
+              "redundant",
+              "aborted"
+            ]
+          },
+          "pattern": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "backtracks": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "class_size",
+          "status",
+          "pattern",
+          "backtracks"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "algorithm",
+    "pi_order",
+    "summary",
+    "patterns",
+    "faults"
+  ]
+}

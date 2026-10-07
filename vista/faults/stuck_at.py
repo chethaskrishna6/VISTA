@@ -1,6 +1,8 @@
 """Engine 2: single stuck-at fault model and fault-universe generation."""
 from __future__ import annotations
 
+from vista.schema import SCHEMA_VERSION
+
 import json
 import sys
 from dataclasses import dataclass
@@ -57,7 +59,7 @@ def generate_stuck_at_faults(circuit: Circuit) -> list[Fault]:
 def universe_to_dict(circuit: Circuit, faults: list[Fault]) -> dict:
     """JSON contract for Member 2 (and for our own ATPG/simulator)."""
     return {
-        "schema_version": "0.1",
+        "schema_version": SCHEMA_VERSION, "document": "fault_list",
         "circuit": circuit.name,
         "fault_model": "stuck_at",
         "collapsed": False,

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA circuit (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "circuit"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "primary_inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "primary_outputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "driver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fanout": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_stem": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "level",
+          "driver",
+          "fanout",
+          "is_stem"
+        ]
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "and",
+              "nand",
+              "or",
+              "nor",
+              "xor",
+              "xnor",
+              "not",
+              "buf"
+            ]
+          },
+          "output": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "output",
+          "inputs"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "primary_inputs",
+    "primary_outputs",
+    "nets",
+    "gates"
+  ]
+}

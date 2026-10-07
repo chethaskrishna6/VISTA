@@ -1,6 +1,8 @@
 """Core circuit data model for VISTA (Engine 1)."""
 from __future__ import annotations
 
+from vista.schema import SCHEMA_VERSION
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -142,7 +144,7 @@ class Circuit:
     def to_dict(self) -> dict:
         lvl = self.levelize()
         return {
-            "schema_version": "0.1",
+            "schema_version": SCHEMA_VERSION, "document": "circuit",
             "circuit": self.name,
             "primary_inputs": self.primary_inputs,
             "primary_outputs": self.primary_outputs,

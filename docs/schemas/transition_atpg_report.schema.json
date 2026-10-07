@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VISTA transition_atpg_report (schema 1.x)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+$"
+    },
+    "document": {
+      "const": "transition_atpg_report"
+    },
+    "circuit": {
+      "type": "string"
+    },
+    "fault_model": {
+      "const": "transition"
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "pi_order": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "total_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untestable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pairs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untestable_reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "coverage_pct": {
+          "type": "number"
+        },
+        "efficiency_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_faults",
+        "detected",
+        "untestable",
+        "pairs",
+        "untestable_reasons",
+        "coverage_pct",
+        "efficiency_pct"
+      ]
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "v1": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "v2": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "cube1": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          },
+          "cube2": {
+            "type": "string",
+            "pattern": "^[01X]*$"
+          }
+        },
+        "required": [
+          "index",
+          "v1",
+          "v2",
+          "cube1",
+          "cube2"
+        ]
+      }
+    },
+    "faults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "detected",
+              "untestable"
+            ]
+          },
+          "pair": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "pair",
+          "reason"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "document",
+    "circuit",
+    "fault_model",
+    "algorithm",
+    "pi_order",
+    "summary",
+    "pairs",
+    "faults"
+  ]
+}

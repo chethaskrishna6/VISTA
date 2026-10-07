@@ -1,6 +1,8 @@
 """Engine 4 (part 2): pattern-set fault simulation, fault dropping, detection matrix."""
 from __future__ import annotations
 
+from vista.schema import SCHEMA_VERSION
+
 import argparse
 import json
 import random
@@ -95,7 +97,7 @@ class SimReport:
         wt = sum(self.weights[f] for f in self.faults)
         wd = sum(self.weights[f] for f in self.detected)
         return {
-            "schema_version": "0.1",
+            "schema_version": SCHEMA_VERSION, "document": "fault_sim_report",
             "circuit": self.circuit,
             "fault_model": "stuck_at",
             "fault_dropping": self.drop,
