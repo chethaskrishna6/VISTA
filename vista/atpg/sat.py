@@ -95,14 +95,18 @@ class SatAtpg:
         self._cnf.add(v if value else -v)
         return v
 
-    def generate(self, fault: Fault) -> SatResult:
+    def generate(self, fault: Fault, require: list[tuple[str, int]] | tuple = ()) -> SatResult:
+        """require: extra good-machine conditions, e.g. [(net, value)] (used for launch-on-capture)."""
+        unknown = [n for n, _ in require if n not in self._gv]
+        if unknown:
+            raise ValueError(f"unknown nets in require: {unknown}")
         t0 = time.perf_counter()
         cone = self._sim.cone_for(fault)
         cnf = self._cnf
         act = cnf.new_var()
         cnf.guard = act
         try:
-            fv: dict[str, int] = {}                    # net -> faulty-machine variable (cone only)
+            fv: dict[str, int] = {}                  # net -> faulty-machine variable (cone only)
             forced = fault.gate if fault.is_branch else None
             if not fault.is_branch:
                 fv[fault.net] = self._const(fault.value)
@@ -119,15 +123,18 @@ class SatAtpg:
                     d = cnf.new_var()
                     _xor2(cnf, d, self._gv[po], fv[po])
                     diffs.append(d)
-            cnf.add(*diffs)                            # some PO must differ (empty -> UNSAT)
+            cnf.add(*diffs)                          # some PO must differ (empty -> UNSAT)
         finally:
             cnf.guard = None
-        sat = self._solver.solve(assumptions=[act])
+            
+        lits = [self._gv[n] if v else -self._gv[n] for n, v in require]
+        sat = self._solver.solve(assumptions=[act, *lits])
+        
         pattern: dict[str, int] = {}
         if sat:
             true = {lit for lit in self._solver.get_model() if lit > 0}
             pattern = {pi: int(self._gv[pi] in true) for pi in self.circuit.primary_inputs}
-        self._solver.add_clause([-act])                # retire this fault's clauses
+        self._solver.add_clause([-act])              # retire this fault's clauses
         return SatResult(fault, Outcome.TESTED if sat else Outcome.REDUNDANT,
                          pattern, time.perf_counter() - t0)
     def justify(self, net: str, value: int) -> dict[str, int] | None:

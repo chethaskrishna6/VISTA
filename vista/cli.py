@@ -14,6 +14,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "merge": ("vista.atpg.merge", "cube-merging compaction"),
     "schema": ("vista.schema", "export or validate the JSON contract"),
     "matrix": ("vista.matrix", "detection matrix for a given pattern set"),
+    "loc-atpg": ("vista.atpg.loc", "launch-on-capture transition ATPG (full scan)"),
 }
 
 
