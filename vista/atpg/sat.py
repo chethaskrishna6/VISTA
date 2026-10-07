@@ -130,3 +130,10 @@ class SatAtpg:
         self._solver.add_clause([-act])                # retire this fault's clauses
         return SatResult(fault, Outcome.TESTED if sat else Outcome.REDUNDANT,
                          pattern, time.perf_counter() - t0)
+    def justify(self, net: str, value: int) -> dict[str, int] | None:
+        """Exact: a full vector putting `net` at `value` in the good circuit, or None if impossible."""
+        lit = self._gv[net] if value else -self._gv[net]
+        if not self._solver.solve(assumptions=[lit]):
+            return None
+        true = {l for l in self._solver.get_model() if l > 0}
+        return {pi: int(self._gv[pi] in true) for pi in self.circuit.primary_inputs}
