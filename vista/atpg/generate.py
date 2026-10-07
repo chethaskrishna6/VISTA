@@ -27,18 +27,24 @@ class AtpgResult:
     cubes: list[Pattern] = field(default_factory=list)         # with don't-cares (absent PIs)
     covered_by: dict[Fault, int] = field(default_factory=dict)  # fault -> pattern index
     podem: dict[Fault, PodemResult] = field(default_factory=dict)
+    sat_redundant: list[Fault] = field(default_factory=list)   # proven by the SAT fallback
+    sat_patterns: int = 0
+    sat_seconds: float = 0.0
 
     def _w(self, fs) -> int:
         return sum(self.weights[f] for f in fs)
 
     @property
-    def redundant(self): return [f for f, r in self.podem.items() if r.outcome is Outcome.REDUNDANT]
+    def redundant(self):
+        proven = [f for f, r in self.podem.items() if r.outcome is Outcome.REDUNDANT]
+        return proven + self.sat_redundant
     @property
     def aborted(self): return [f for f, r in self.podem.items() if r.outcome is Outcome.ABORTED]
     @property
     def unresolved(self):
-        """PODEM gave up AND no later pattern happened to detect the fault."""
-        return [f for f in self.aborted if f not in self.covered_by]
+        """PODEM gave up, no later pattern detected it, and SAT hasn't proven it redundant."""
+        return [f for f in self.aborted
+                if f not in self.covered_by and f not in self.sat_redundant]
     @property
     def coverage(self) -> float:
         return self._w(self.covered_by) / self._w(self.faults)
@@ -65,6 +71,7 @@ class AtpgResult:
                          for i, p in enumerate(self.patterns)],
             "faults": [{"id": f.id, "class_size": self.weights[f],
                         "status": "detected" if f in self.covered_by else
+                                  "redundant" if f in self.sat_redundant else
                                   self.podem[f].outcome.value,
                         "pattern": self.covered_by.get(f),
                         "backtracks": self.podem[f].backtracks if f in self.podem else 0}
@@ -110,6 +117,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--verbose", action="store_true", help="per-fault listing")
     ap.add_argument("--json", metavar="FILE")
     ap.add_argument("--scoap", action="store_true", help="SCOAP-guided backtrace/objective")
+    ap.add_argument("--hybrid", action="store_true", help="SAT fallback for unresolved faults")
+    ap.add_argument("--parts", help="comma-separated SCOAP parts (implies --scoap), e.g. frontier")
     args = ap.parse_args(argv)
 
     c = load_circuit(args.netlist)
@@ -121,8 +130,13 @@ def main(argv: list[str] | None = None) -> None:
         faults, weights = col.representatives, {r: len(m) for r, m in col.classes.items()}
 
     t0 = time.perf_counter()
-    res = generate_test_set(c, faults, weights, args.limit, args.fill,
-                            Scoap(c) if args.scoap else None)
+    use = frozenset(args.parts.split(",")) if args.parts else SCOAP_PARTS
+    scoap = Scoap(c) if (args.scoap or args.parts) else None
+    if args.hybrid:
+        from vista.atpg.hybrid import run_hybrid
+        res = run_hybrid(c, faults, weights, args.limit, args.fill, scoap, use)
+    else:
+        res = generate_test_set(c, faults, weights, args.limit, args.fill, scoap, use)
     wall = time.perf_counter() - t0
 
     print(f"{c.name}: {len(faults)} faults, {len(c.primary_inputs)} PIs, backtrack limit {args.limit}")
@@ -149,8 +163,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"aborted   ({len(res.aborted)}): {[f.id for f in res.aborted][:10]}")
     print(f"fault coverage    : {100 * res.coverage:.2f}%")
     print(f"fault efficiency  : {100 * res.efficiency:.2f}%")
+    print(f"unresolved        : {len(res.unresolved)}   SAT patterns: {res.sat_patterns}   "
+          f"SAT redundant: {len(res.sat_redundant)}   SAT time: {res.sat_seconds:.2f}s")
     print(f"{c.name}: {len(faults)} faults, {len(c.primary_inputs)} PIs, "
-          f"backtrack limit {args.limit}, heuristic {'scoap' if args.scoap else 'naive'}")
+          f"backtrack limit {args.limit}, heuristic {'scoap' if scoap is not None else 'naive'}")
 
     # independent check: a separate code path must agree on what the patterns detect
     from vista.sim.pattern_sim import run_fault_simulation
