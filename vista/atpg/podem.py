@@ -11,6 +11,7 @@ from vista.rtl.parser import VerilogParser
 from vista.sim.fault_sim import SerialFaultSimulator
 from vista.sim.logic import CONTROLLING, INVERTING, X, from_str, non_controlling
 from vista.sim.incremental import IncrementalSimulator
+from typing import Sequence
 Objective = tuple[str, int]          # (net, desired good-machine value)
 SCOAP_PARTS = frozenset({"backtrace", "frontier", "side"})
 
@@ -34,14 +35,19 @@ class PodemResult:
     seconds: float = 0.0
 class PodemEngine:
     def __init__(self, circuit: Circuit, fault: Fault, scoap: Scoap | None = None,
-                 use: frozenset[str] | set[str] = SCOAP_PARTS) -> None:
-        unknown = set(use) - SCOAP_PARTS
-        if unknown:
-            raise ValueError(f"unknown SCOAP parts: {sorted(unknown)}")
+                 use: frozenset[str] | set[str] = SCOAP_PARTS,
+                 require: Sequence[tuple[str, int]] = ()) -> None:
+        bad_parts = set(use) - SCOAP_PARTS
+        if bad_parts:
+            raise ValueError(f"unknown SCOAP parts: {sorted(bad_parts)}")
+        bad_nets = [n for n, _ in require if n not in circuit.nets]
+        if bad_nets:
+            raise ValueError(f"unknown nets in require: {bad_nets}")
         self.circuit = circuit
         self.fault = fault
-        self.scoap = scoap                      # None -> all naive "first X input" heuristics
-        self.use = frozenset(use)               # which SCOAP components are active
+        self.scoap = scoap
+        self.use = frozenset(use)
+        self.require = tuple(require)
         self._sim = SerialFaultSimulator(circuit)
         self._order = circuit.gates_in_topo_order()
         self._inc = IncrementalSimulator(circuit, self._order)
@@ -49,12 +55,12 @@ class PodemEngine:
         fl = self.fault
         live = {g.output for g in self._cone} | (set() if fl.is_branch else {fl.net})
         forced = fl.gate if fl.is_branch else None
-        # (gate, input nets that can carry an effect, is this the branch-forced gate)
         self._frontier_plan = [(g, tuple(n for n in g.inputs if n in live), g.name == forced)
-                               for g in self._cone]   # gates that can ever see a fault effect
+                               for g in self._cone]
     def _on(self, part: str) -> bool:
         return self.scoap is not None and part in self.use
-
+    def _pending(self, values: dict[str, Pair]) -> bool:
+        return any(values[n][0] == X for n, _ in self.require)
     # ---- implication: forward-simulate the (good, faulty) pair --------
     def imply(self, assignment: dict[str, int]) -> dict[str, Pair]:
         """Net -> (good, faulty). Unassigned PIs are X."""
@@ -124,6 +130,15 @@ class PodemEngine:
 
     # ---- objective -------------------------------------------------------
     def objective(self, values: dict[str, Pair]) -> tuple[Status, Objective | None]:
+        pending = None
+        for net, val in self.require:
+            g = values[net][0]
+            if g == X:
+                pending = pending or (net, val)
+            elif g != val:
+                return Status.FAILED, None          # a required value is already contradicted
+        if pending is not None:
+            return Status.CONTINUE, pending         # justify requirements first
         if self.detected(values):
             return Status.DETECTED, None
         fl = self.fault
@@ -206,7 +221,8 @@ class PodemEngine:
                 return PodemResult(self.fault, Outcome.TESTED, dict(assignment), backtracks)
 
             excited = values[self.fault.net][0] != X
-            if status is Status.CONTINUE and (not excited or self.x_path_exists(values)):
+            if status is Status.CONTINUE and (self._pending(values) or not excited
+                                              or self.x_path_exists(values)):
                 pi, val = self.backtrace(values, *obj)
                 assignment[pi] = val
                 stack.append((pi, val, False))

@@ -15,6 +15,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "schema": ("vista.schema", "export or validate the JSON contract"),
     "matrix": ("vista.matrix", "detection matrix for a given pattern set"),
     "loc-atpg": ("vista.atpg.loc", "launch-on-capture transition ATPG (full scan)"),
+    "loc-compact": ("vista.atpg.loc_compact", "launch-on-capture compaction (full scan)"),
 }
 
 
